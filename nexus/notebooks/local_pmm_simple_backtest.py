@@ -14,20 +14,8 @@ from controllers.market_making.pmm_simple import PMMSimpleConfig  # noqa: E402
 from core.backtesting import BacktestingEngine  # noqa: E402
 from core.data_sources.clob import CLOBDataSource  # noqa: E402
 
-# Load local dataset
-local_data_path = os.path.join(root_path, "nexus", "history", "binance-futures")
-clob = CLOBDataSource(local_data_path=local_data_path)
-
-backtesting = BacktestingEngine(load_cached_data=False)
-
-# Preload candles from local file
-clob._load_local_dataset("binance_perpetual", "BTCUSDT", "1m")
-backtesting._bt_engine.backtesting_data_provider.candles_feeds["binance_perpetual_BTCUSDT_1m"] = clob.candles_cache[
-    ("binance_perpetual", "BTCUSDT", "1m")
-].candles_df
-bt_data = backtesting._bt_engine.backtesting_data_provider.candles_feeds["binance_perpetual_BTCUSDT_1m"]
-backtesting._bt_engine.backtesting_data_provider.start_time = bt_data["timestamp"].min()
-backtesting._bt_engine.backtesting_data_provider.end_time = bt_data["timestamp"].max()
+START = int(datetime.datetime(2024, 1, 1).timestamp())
+END = int(datetime.datetime(2024, 1, 2).timestamp())
 
 config = PMMSimpleConfig(
     connector_name="binance_perpetual",
@@ -43,12 +31,24 @@ config = PMMSimpleConfig(
     executor_refresh_time=60,
 )
 
-start = int(datetime.datetime(2024, 1, 1).timestamp())
-end = int(datetime.datetime(2024, 1, 2).timestamp())
-
 
 async def main():
-    result = await backtesting.run_backtesting(config, start, end, "1m")
+    local_data_path = os.path.join(root_path, "nexus", "history", "binance-futures")
+    clob = CLOBDataSource(local_data_path=local_data_path)
+
+    backtesting = BacktestingEngine(load_cached_data=False)
+
+    await clob.get_candles("binance_perpetual", "BTCUSDT", "1m", START, END)
+    backtesting._bt_engine.backtesting_data_provider.candles_feeds[
+        "binance_perpetual_BTCUSDT_1m"
+    ] = clob.candles_cache[("binance_perpetual", "BTCUSDT", "1m")].candles_df
+    bt_data = backtesting._bt_engine.backtesting_data_provider.candles_feeds[
+        "binance_perpetual_BTCUSDT_1m"
+    ]
+    backtesting._bt_engine.backtesting_data_provider.start_time = bt_data["timestamp"].min()
+    backtesting._bt_engine.backtesting_data_provider.end_time = bt_data["timestamp"].max()
+
+    result = await backtesting.run_backtesting(config, START, END, "1m")
     print(result.get_results_summary())
 
 
